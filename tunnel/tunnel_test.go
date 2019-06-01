@@ -8,21 +8,22 @@ import (
 )
 
 func TestTunnel(t *testing.T) {
-	server := func(ch chan int) {
-		ts := &Tunnel{
-			Net:          "tcp",
-			Addr:         "127.0.0.1:15050",
-			Password:     "tnt",
-			CryptoMethod: crypto.NewCryptoDES("tnt"),
-		}
+	cryptoMethod := crypto.NewCryptoDES("tnt")
 
-		err := ts.Listen("", "")
+	server := func(ch chan int) {
+
+		ts := NewTunnelServer(cryptoMethod)
+
+		defer ts.Close()
+
+		err := ts.Listen("tcp", "127.0.0.1:15050")
 		if err != nil {
 			t.Error(err)
 			return
 		}
 
-		serveConn := func(tun *Tunnel, ch chan int) {
+		serveConn := func(tun Tunnel, ch chan int) {
+			defer tun.Close()
 			dataBuf, err := tun.Read()
 			if err != nil {
 				t.Error(err)
@@ -35,7 +36,7 @@ func TestTunnel(t *testing.T) {
 		}
 
 		// for {
-		conn, err := ts.Accept()
+		tun, err := ts.Accept()
 		if err != nil {
 			t.Log(err)
 			return
@@ -43,7 +44,7 @@ func TestTunnel(t *testing.T) {
 
 		chIn := make(chan int, 1)
 
-		go serveConn(conn, chIn)
+		go serveConn(tun, chIn)
 		// }
 
 		chInside := <-chIn
@@ -51,21 +52,20 @@ func TestTunnel(t *testing.T) {
 	}
 
 	client := func() {
-		tc := &Tunnel{
-			Net:          "tcp",
-			Addr:         "127.0.0.1:15050",
-			Password:     "tnt",
-			CryptoMethod: crypto.NewCryptoDES("tnt"),
-		}
+		tc := NewTunnelClient(cryptoMethod)
 
-		err := tc.Dial("", "")
+		defer tc.Close()
+
+		tun, err := tc.Dial("tcp", "127.0.0.1:15050")
 		if err != nil {
 			t.Error(err)
 			return
 		}
 
+		defer tun.Close()
+
 		dataBuf := []byte("tnt is a kind of bomb, is it true?")
-		n, err := tc.Write(dataBuf)
+		n, err := tun.Write(dataBuf)
 		if err != nil {
 			t.Error(err)
 			return

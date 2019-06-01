@@ -2,54 +2,59 @@ package tunnel
 
 import (
 	"net"
+
+	"github.com/random634/proxy-lite/tunnel/crypto"
 )
 
-func (t *Tunnel) Listen(network, addr string) error {
-	if network != "" {
-		t.Net = network
-	}
+type TunnelServer interface {
+	Listen(network, addr string) (err error)
+	Accept() (t Tunnel, err error)
+	Close() (err error)
+}
 
-	if addr != "" {
-		t.Addr = addr
-	}
+type TunnelServerImpl struct {
+	Listener     net.Listener
+	CryptoMethod crypto.CryptoMethod
+}
 
-	// host, strPort, err := net.SplitHostPort(t.Addr)
-	// if err != nil {
-	// 	return err
-	// }
-	// port, err := strconv.Atoi(strPort)
-	// if err != nil {
-	// 	return err
-	// }
+func NewTunnelServer(cryptoMethod crypto.CryptoMethod) TunnelServer {
+	ts := new(TunnelServerImpl)
+	ts.CryptoMethod = cryptoMethod
 
-	listen, err := net.Listen(t.Net, t.Addr)
+	return ts
+}
+
+func (ts *TunnelServerImpl) Listen(network, addr string) (err error) {
+	listen, err := net.Listen(network, addr)
 	if err != nil {
 		return err
 	}
 
-	t.Listener = listen
+	ts.Listener = listen
 
-	return err
+	return
 }
 
-func (t *Tunnel) Accept() (*Tunnel, error) {
-	if t.Listener == nil {
+func (ts *TunnelServerImpl) Accept() (t Tunnel, err error) {
+	if ts.Listener == nil {
 		return nil, ErrTunnelListenerNotExist
 	}
 
-	conn, err := t.Listener.Accept()
+	conn, err := ts.Listener.Accept()
 
 	if err != nil {
 		return nil, err
 	}
 
-	tunnel := &Tunnel{
-		Net:          t.Net,
-		Addr:         t.Addr,
-		Password:     t.Password,
-		CryptoMethod: t.CryptoMethod,
-		Conn:         conn,
+	t = NewTunnel(conn, ts.CryptoMethod)
+
+	return
+}
+
+func (ts *TunnelServerImpl) Close() (err error) {
+	if ts.Listener == nil {
+		return ts.Listener.Close()
 	}
 
-	return tunnel, err
+	return nil
 }

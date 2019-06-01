@@ -8,13 +8,15 @@ import (
 	"github.com/random634/proxy-lite/tunnel/crypto"
 )
 
-type Tunnel struct {
-	Net          string
-	Addr         string
-	Password     string
-	CryptoMethod crypto.CryptoMethod
-	Listener     net.Listener
+type Tunnel interface {
+	Read() (dataBuf []byte, err error)
+	Write(dataBuf []byte) (n int, err error)
+	Close() error
+}
+
+type TunnelImpl struct {
 	Conn         net.Conn
+	CryptoMethod crypto.CryptoMethod
 }
 
 var (
@@ -23,7 +25,15 @@ var (
 	ErrTunnelConnNotExist     = errors.New("tunnel conn not exist")
 )
 
-func (t *Tunnel) Read() (b []byte, err error) {
+func NewTunnel(conn net.Conn, cryptoMethod crypto.CryptoMethod) Tunnel {
+	t := new(TunnelImpl)
+	t.Conn = conn
+	t.CryptoMethod = cryptoMethod
+
+	return t
+}
+
+func (t *TunnelImpl) Read() (dataBuf []byte, err error) {
 	if t.Conn == nil {
 		return nil, ErrTunnelConnNotExist
 	}
@@ -33,23 +43,21 @@ func (t *Tunnel) Read() (b []byte, err error) {
 
 	// 小端序
 	lenVal := int(lenBuf[0]) + int(lenBuf[1])*256
-	dataBuf := make([]byte, lenVal)
+	dataBuf = make([]byte, lenVal)
 
 	io.ReadFull(t.Conn, dataBuf)
 
 	if t.CryptoMethod != nil {
-		b, err = t.CryptoMethod.Decrypt(dataBuf)
+		dataBuf, err = t.CryptoMethod.Decrypt(dataBuf)
 		if err != nil {
 			return nil, err
 		}
-
-		dataBuf = b
 	}
 
 	return dataBuf, nil
 }
 
-func (t *Tunnel) Write(dataBuf []byte) (n int, err error) {
+func (t *TunnelImpl) Write(dataBuf []byte) (n int, err error) {
 	if t.Conn == nil {
 		return 0, ErrTunnelConnNotExist
 	}
@@ -77,15 +85,9 @@ func (t *Tunnel) Write(dataBuf []byte) (n int, err error) {
 	return lenData, err
 }
 
-func (t *Tunnel) Close() error {
-	if t.Listener != nil {
-		t.Listener.Close()
-		return nil
-	}
-
+func (t *TunnelImpl) Close() error {
 	if t.Conn != nil {
-		t.Conn.Close()
-		return nil
+		return t.Conn.Close()
 	}
 
 	return ErrTunnelNotExist

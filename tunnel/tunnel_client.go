@@ -2,32 +2,37 @@ package tunnel
 
 import (
 	"net"
+
+	"github.com/random634/proxy-lite/tunnel/crypto"
 )
 
-func (t *Tunnel) Dial(network, addr string) error {
-	if network != "" {
-		t.Net = network
-	}
+type TunnelClient interface {
+	Dial(network, addr string) (t Tunnel, err error)
+	Close() (err error)
+}
 
-	if addr != "" {
-		t.Addr = addr
-	}
+type TunnelClientImpl struct {
+	CryptoMethod crypto.CryptoMethod
+}
 
-	// host, strPort, err := net.SplitHostPort(t.Addr)
-	// if err != nil {
-	// 	return err
-	// }
-	// port, err := strconv.Atoi(strPort)
-	// if err != nil {
-	// 	return err
-	// }
+func NewTunnelClient(cryptoMethod crypto.CryptoMethod) TunnelClient {
+	tc := new(TunnelClientImpl)
+	tc.CryptoMethod = cryptoMethod
 
-	conn, err := net.Dial(t.Net, t.Addr)
+	return tc
+}
+
+func (tc *TunnelClientImpl) Dial(network, addr string) (t Tunnel, err error) {
+	conn, err := net.Dial(network, addr)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	t.Conn = conn
+	t = NewTunnel(conn, tc.CryptoMethod)
 
-	return err
+	return
+}
+
+func (ts *TunnelClientImpl) Close() (err error) {
+	return nil
 }
